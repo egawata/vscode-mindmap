@@ -108,29 +108,30 @@
         }
     },
     "scripts": {
-        "build": "npm run package && vsce package",
+        "build": "npm run package && npx vsce package",
         "compile": "tsc -watch -p ./",
         "watch": "webpack --watch --mode development",
         "package": "webpack --mode production --devtool hidden-source-map",
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
         "commit": "npm run package && git add . && git commit -m 'up'",
-        "major": "npm run commit && vsce publish major",
-        "minor": "npm run commit && vsce publish minor",
-        "patch": "npm run commit && vsce publish patch",
+        "major": "npm run commit && npx vsce publish major",
+        "minor": "npm run commit && npx vsce publish minor",
+        "patch": "npm run commit && npx vsce publish patch",
         "web": "ovsx publish"
     },
     "dependencies": {
         "@resvg/resvg-js": "^2.6.0",
         "base64-js": "^1.5.1",
         "jszip": "^3.6.0",
-        "request": "^2.88.2",
         "string-replace-async": "^3.0.2",
         "xmind": "^2.2.33",
         "xml-formatter": "^3.6.0",
-        "xml-js": "^1.6.11"
+        "xml-js": "^1.6.11",
+        "yarn": "^1.22.22"
     },
     "devDependencies": {
+        "@vscode/vsce": "^3.2.1",
         "@types/mocha": "^2.2.42",
         "@types/node": "16.x",
         "@types/vscode": "^1.67.0",

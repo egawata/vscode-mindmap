@@ -1,5 +1,6 @@
 const fs = require('fs')
-const request = require('request')
+const https = require('https')
+const http = require('http')
 module.exports = class {
     //判断文件是否存在
     getStat(path) {
@@ -30,21 +31,31 @@ module.exports = class {
     //文件请求
     requestFile(url) {
         return new Promise((resolve, reject) => {
-            request({
-                method: 'get',
-                url,
-                pool: false,
-                strictSSL: false,
-                rejectUnauthorized: false,
-                encoding: null //  if you expect binary data
-            }, (error, res, body) => {
-                const {statusCode} = res || {}
+            const parsedUrl = new URL(url)
+            const client = parsedUrl.protocol === 'https:' ? https : http
+
+            const options = {
+                rejectUnauthorized: false
+            }
+
+            const req = client.get(url, options, (res) => {
+                const statusCode = res.statusCode || 0
                 if (!(statusCode === 200 || statusCode === 206)) {
                     reject('路径不存在')
-                } else if (error) {
-                    reject(error)
+                    return
                 }
-                resolve(body)
+
+                const chunks = []
+                res.on('data', (chunk) => {
+                    chunks.push(chunk)
+                })
+                res.on('end', () => {
+                    resolve(Buffer.concat(chunks))
+                })
+            })
+
+            req.on('error', (error) => {
+                reject(error)
             })
         })
     }

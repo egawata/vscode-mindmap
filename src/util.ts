@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
-const request = require('request')
+import * as https from "https";
+import * as http from "http";
 const base64 = require('base64-js');
 import replaceAsync from "string-replace-async";
 
@@ -47,28 +48,32 @@ export async function changeSvgImg(svgContent: string) {
 //文件请求
 export function requestFile(url: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-        request(
-            {
-                method: 'get',
-                url,
-                pool: false,
-                strictSSL: false,
-                rejectUnauthorized: false,
-                encoding: null // if you expect binary data
-            },
-            (error: any, res: any, body: Buffer | PromiseLike<Buffer>) => {
-                if (error) {
-                    reject(error);
-                } else {
-                    if (!(res.statusCode === 200 || res.statusCode === 206)) {
-                        reject('路径不存在');
-                    } else if (error) {
-                        reject(error);
-                    }
-                    resolve(body);
-                }
+        const parsedUrl = new URL(url);
+        const client = parsedUrl.protocol === 'https:' ? https : http;
+
+        const options = {
+            rejectUnauthorized: false
+        };
+
+        const req = client.get(url, options, (res) => {
+            const statusCode = res.statusCode || 0;
+            if (!(statusCode === 200 || statusCode === 206)) {
+                reject('路径不存在');
+                return;
             }
-        );
+
+            const chunks: Uint8Array[] = [];
+            res.on('data', (chunk: Uint8Array) => {
+                chunks.push(chunk);
+            });
+            res.on('end', () => {
+                resolve(Buffer.concat(chunks));
+            });
+        });
+
+        req.on('error', (error) => {
+            reject(error);
+        });
     });
 }
 
