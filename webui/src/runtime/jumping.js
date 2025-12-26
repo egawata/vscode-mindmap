@@ -50,6 +50,10 @@ define(function(require, exports, module) {
         var hotbox = this.hotbox;
         var compositionLock = false;
 
+        // Alt/Option key temporary hand tool state
+        var altKeyHandToolActive = false;
+        var handToolWasActiveBeforeAlt = false;
+
         // normal -> *
         receiver.listen('normal', function(e) {
             // 为了防止处理进入edit模式而丢失处理的首字母,此时receiver必须为enable
@@ -71,6 +75,17 @@ define(function(require, exports, module) {
              */
             switch (e.type) {
                 case 'keydown': {
+                    // Alt/Option key: activate hand tool temporarily
+                    if (e.keyCode === 18 && !altKeyHandToolActive) {
+                        handToolWasActiveBeforeAlt = minder.queryCommandState('hand') === 1;
+                        if (!handToolWasActiveBeforeAlt) {
+                            minder.execCommand('hand');
+                        }
+                        altKeyHandToolActive = true;
+                        e.preventDefault();
+                        break;
+                    }
+
                     if (minder.getSelectedNode()) {
                         if (isIntendToInput(e)) {
                             return fsm.jump('input', 'user-input');
@@ -83,6 +98,14 @@ define(function(require, exports, module) {
                     break;
                 }
                 case 'keyup': {
+                    // Alt/Option key: deactivate hand tool
+                    if (e.keyCode === 18 && altKeyHandToolActive) {
+                        if (!handToolWasActiveBeforeAlt) {
+                            minder.execCommand('hand');
+                        }
+                        altKeyHandToolActive = false;
+                        e.preventDefault();
+                    }
                     break;
                 }
                 default: {}
