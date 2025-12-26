@@ -31,5 +31,5 @@ Just create a file with the suffix km or xmind directly.
 
 ## Thanks
 
-[vscode-mindmap](https://github.com/souche/vscode-mindmap)
-[upstream](https://github.com/oorzc/vscode-mindmap)
+- [vscode-mindmap](https://github.com/souche/vscode-mindmap)
+- [upstream](https://github.com/oorzc/vscode-mindmap)
