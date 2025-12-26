@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as https from "https";
 import * as http from "http";
-const base64 = require('base64-js');
+import * as base64 from 'base64-js';
 import replaceAsync from "string-replace-async";
 
 export function getRootUri() {
@@ -33,11 +33,11 @@ export async function changeSvgImg(svgContent: string) {
             // 下载图片
             const response = await requestFile(url)
             // 将图片转换为Base64编码
-            const base64Data = base64.fromByteArray(response);
+            const base64Data = base64.fromByteArray(new Uint8Array(response));
             // 替换SVG中的图片地址为Base64编码
             const base64ImageUrl = `data:image/png;base64,${base64Data}`;
             return match.replace(url, base64ImageUrl);
-        } catch (error) {
+        } catch {
             return match
         }
     });

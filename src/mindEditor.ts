@@ -2,16 +2,31 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { selectFile, getRootUri, changeSvgImg } from "./util";
-const xmindparser = require('./xmindparser');
-let parser = new xmindparser()
+import xmindparser from './xmindparser';
+const parser = new xmindparser();
 
-const { Resvg, initWasm } = require('./wasm')
+import { Resvg, initWasm } from './wasm';
 const index_bg = fs.readFileSync(path.join(__dirname, '../webui/resvg-js/index_bg.wasm'))
 initWasm(index_bg)
 const fontPath = path.join(__dirname, '../webui/resvg-js/fonts/Alibaba_PuHuiTi_2.0_45_Light_45_Light.ttf')
 
 const matchableFileTypes: string[] = ['xmind', 'km', 'svg'];
 const viewType = 'vscode-mindmap.editor';
+
+interface WebviewMessage {
+	command: string;
+	exportData?: string;
+	content?: string;
+	link?: string;
+	type?: string;
+	filename?: string;
+}
+
+interface ExtensionMessage {
+	type: string;
+	from: string;
+	link?: string;
+}
 
 export class MindEditorProvider implements vscode.CustomEditorProvider {
 	constructor(public context: vscode.ExtensionContext) {
@@ -29,10 +44,10 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 		return providerRegistration;
 	}
 
-	revertCustomDocument(document: vscode.CustomDocument, cancellation: vscode.CancellationToken): Thenable<void> {
+	revertCustomDocument(_document: vscode.CustomDocument, _cancellation: vscode.CancellationToken): Thenable<void> {
 		throw new Error('Method not implemented.');
 	}
-	backupCustomDocument(document: vscode.CustomDocument, context: vscode.CustomDocumentBackupContext, cancellation: vscode.CancellationToken): Thenable<vscode.CustomDocumentBackup> {
+	backupCustomDocument(_document: vscode.CustomDocument, _context: vscode.CustomDocumentBackupContext, _cancellation: vscode.CancellationToken): Thenable<vscode.CustomDocumentBackup> {
 		throw new Error('Method not implemented.');
 	}
 
@@ -41,7 +56,7 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 	>()
 	public readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event
 
-	saveCustomDocumentAs(document: vscode.CustomDocument, destination: vscode.Uri, cancellation: vscode.CancellationToken): Thenable<void> {
+	saveCustomDocumentAs(_document: vscode.CustomDocument, _destination: vscode.Uri, _cancellation: vscode.CancellationToken): Thenable<void> {
 		throw new Error('Method not implemented.');
 	}
 
@@ -52,7 +67,7 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 		};
 	}
 
-	public saveCustomDocument(document: vscode.CustomDocument): Thenable<void> {
+	public saveCustomDocument(_document: vscode.CustomDocument): Thenable<void> {
 		return Promise.resolve();
 	}
 
@@ -96,7 +111,7 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 		};
 		panel.webview.html = html;
 		panel.webview.onDidReceiveMessage(
-			async (message: any) => {
+			async (message: WebviewMessage) => {
 				switch (message.command) {
 					case 'loaded':
 						panel.webview.postMessage({
@@ -107,14 +122,18 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 						return;
 					case 'save':
 						try {
-							this.updateDocument(document, message, true);
+							if (message.exportData) {
+								this.updateDocument(document, { command: message.command, exportData: message.exportData }, true);
+							}
 						} catch (ex) {
 							console.error(ex);
 						}
 						return;
 					case 'draft':
 						try {
-							this.updateDocument(document, message, false);
+							if (message.exportData) {
+								this.updateDocument(document, { command: message.command, exportData: message.exportData }, false);
+							}
 						} catch (ex) {
 							console.error(ex);
 						}
@@ -127,7 +146,9 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 						});
 						break;
 					case 'errormsg':
-						vscode.window.showErrorMessage(message.content)
+						if (message.content) {
+							vscode.window.showErrorMessage(message.content)
+						}
 						break;
 					case 'importFile':
 						// 选择文件
@@ -160,8 +181,8 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 									return;
 							}
 
-							if (fileType == 'xmind') {
-								parser.xmindToJSON(importFileUri.fsPath).then((json: any) => {
+							if (fileType === 'xmind') {
+								parser.xmindToJSON(importFileUri.fsPath).then((json: unknown) => {
 									panel.webview.postMessage({
 										command: 'importNewData',
 										content: json,
@@ -169,7 +190,7 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 									});
 								})
 							} else {
-								let content: any = fs.readFileSync(importFileUri.fsPath, 'utf-8')
+								const content: string = fs.readFileSync(importFileUri.fsPath, 'utf-8')
 								panel.webview.postMessage({
 									command: 'importNewData',
 									content,
@@ -180,30 +201,37 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 
 						break;
 					case 'export':
-						let filters: any = { 'All Files': ['*'] }
-						if (message.type == 'xmind') {
+						if (!message.content || !message.type || !message.filename) {
+							break;
+						}
+						const exportContent = message.content;
+						const exportType = message.type;
+						const exportFilename = message.filename;
+						const filters: Record<string, string[]> = { 'All Files': ['*'] }
+						if (exportType === 'xmind') {
 							filters['Text Files'] = ['xmind']
-						} else if (message.type == 'png') {
+						} else if (exportType === 'png') {
 							filters['Images Files'] = ['png']
 						}
 
 						// 弹出保存对话框
 						const rootUri = getRootUri();
-						rootUri && vscode.window.showSaveDialog({
-							defaultUri: vscode.Uri.file(path.join(rootUri.fsPath, message.filename + '.' + message.type)), // 设置默认文件名
-							filters: filters
-						}).then(async uri => {
+						if (rootUri) {
+							vscode.window.showSaveDialog({
+								defaultUri: vscode.Uri.file(path.join(rootUri.fsPath, exportFilename + '.' + exportType)), // 设置默认文件名
+								filters: filters
+							}).then(async uri => {
 							if (uri) {
 								// 处理用户选择的文件路径
 								const filePath = uri.fsPath;
-								if (message.type == 'xmind') {
-									let data = JSON.parse(message.content)
+								if (exportType === 'xmind') {
+									const data = JSON.parse(exportContent)
 									//脑图 json转xmind 浏览器返回blob node返回pathurl
-									parser.JSONToXmind(data, filePath).then((data: any) => {
-										console.log("data", data)
+									parser.JSONToXmind(data, filePath).then((result: unknown) => {
+										console.log("data", result)
 									})
-								} else if (message.type == 'png') {
-									let new_svg = await changeSvgImg(message.content)
+								} else if (exportType === 'png') {
+									const new_svg = await changeSvgImg(exportContent)
 									if (new_svg) {
 										const imageBackgroundColor = mindmapConfig.get<string>('imageBackgroundColor', '#ffffff');
 										const imageScaleSize = mindmapConfig.get<number>('imageScaleSize', 2);
@@ -212,7 +240,7 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 										const opts = {
 											background: imageBackgroundColor,
 											fitTo: {
-												mode: 'zoom',
+												mode: 'zoom' as const,
 												value: imageScaleSize,
 											},
 											font: {
@@ -252,14 +280,15 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 									// } catch (error) {
 									//     //降级处理有的操作系统不支持sharp 则导出普通图片
 									// }
-								} else if (message.type == 'json') {
+								} else if (exportType === 'json') {
 									//格式化json
-									fs.writeFileSync(filePath, JSON.stringify(JSON.parse(message.content), null, "\t"), 'utf-8')
+									fs.writeFileSync(filePath, JSON.stringify(JSON.parse(exportContent), null, "\t"), 'utf-8')
 								} else {
-									fs.writeFileSync(filePath, message.content, 'utf-8')
+									fs.writeFileSync(filePath, exportContent, 'utf-8')
 								}
 							}
-						});
+							});
+						}
 						break;
 					default:
 						break;
@@ -278,7 +307,7 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 		);
 	}
 
-	private notifyExternalExtensions(message: any) {
+	private notifyExternalExtensions(message: ExtensionMessage) {
 		this.extensionChannels.forEach((chanel) => {
 			chanel.postMessage(message);
 		});
@@ -290,14 +319,14 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 			command: string;
 			exportData: string;
 		},
-		save?: boolean
+		_save?: boolean
 	) {
 		const extName = path.extname(document.uri.fsPath).toLowerCase();
-		if (extName == '.xmind') {
+		if (extName === '.xmind') {
 			let data = JSON.parse(message.exportData)
 			// json转xmind
-			parser.JSONToXmind(data, document.uri.fsPath).then((data: any) => {
-				console.log("data", data)
+			parser.JSONToXmind(data, document.uri.fsPath).then((result: unknown) => {
+				console.log("data", result)
 			})
 		} else {
 			fs.writeFileSync(document.uri.fsPath, message.exportData)
@@ -315,7 +344,7 @@ export class MindEditorProvider implements vscode.CustomEditorProvider {
 				try {
 					let data = await parser.xmindToJSON(document.uri.fsPath)
 					result = JSON.stringify(data) || '{}';
-				} catch (error) {
+				} catch {
 					result = '{}';
 				}
 				break;
