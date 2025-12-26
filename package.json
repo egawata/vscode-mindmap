@@ -127,8 +127,7 @@
         "string-replace-async": "^3.0.2",
         "xmind": "^2.2.33",
         "xml-formatter": "^3.6.0",
-        "xml-js": "^1.6.11",
-        "yarn": "^1.22.22"
+        "xml-js": "^1.6.11"
     },
     "devDependencies": {
         "@types/mocha": "^2.2.42",
